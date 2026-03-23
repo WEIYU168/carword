@@ -74,7 +74,7 @@ canvas#road{position:absolute;top:0;left:0;z-index:0;display:block;}
 
 /* WORD CARD */
 #word-card{position:absolute;left:50%;z-index:20;pointer-events:none;will-change:transform;transform:translate(-50%,-50%) scale(.06);}
-.card-frame{position:relative;width:156px;height:156px;display:flex;align-items:center;justify-content:center;}
+.card-frame{position:relative;width:156px;height:156px;display:flex;align-items:center;justify-content:center;background:#C8AA78;border-radius:9px;}
 .card-frame svg.fsv{position:absolute;inset:0;width:100%;height:100%;}
 .card-char{position:relative;z-index:2;font-size:4.6rem;font-weight:900;line-height:1;color:#140800;text-shadow:0 2px 8px rgba(0,0,0,.2);}
 .card-reveal{position:absolute;bottom:-34px;left:50%;transform:translateX(-50%);white-space:nowrap;background:rgba(0,0,0,.85);color:#f0d9b0;font-size:.72rem;padding:3px 13px;border-radius:12px;opacity:0;transition:opacity .15s;}
@@ -157,6 +157,7 @@ canvas#road{position:absolute;top:0;left:0;z-index:0;display:block;}
 
 /* RESULT */
 #result-screen{background:radial-gradient(ellipse at 50% 40%,#1a2050 0%,#0a0a18 60%,#050508 100%);gap:1.1rem;}
+#fw-canvas{position:fixed;inset:0;pointer-events:none;z-index:500;display:none;}
 .res-title{font-size:clamp(2.4rem,6vw,3.8rem);font-weight:900;color:#ffd040;text-shadow:0 0 30px rgba(255,208,64,.6);letter-spacing:.1em;text-align:center;}
 .res-box{background:rgba(255,255,255,.06);border:1px solid rgba(255,208,40,.28);border-radius:14px;padding:1rem 2.4rem;text-align:center;color:#fff;}
 .res-num{font-size:4.8rem;font-weight:900;color:#ffd040;line-height:1;}
@@ -320,6 +321,16 @@ canvas#road{position:absolute;top:0;left:0;z-index:0;display:block;}
     <span class="card-char" id="card-char">日</span></div>
     <div class="card-reveal" id="card-reveal"></div>
   </div>
+  <div id="word-card2" style="display:none;position:absolute;left:62%;z-index:19;pointer-events:none;will-change:transform;transform:translate(-50%,-50%) scale(.06);">
+    <div class="card-frame"><svg class="fsv" id="frame-svg2" viewBox="0 0 156 156"></svg>
+    <span class="card-char" id="card-char2"></span></div>
+    <div class="card-reveal" id="card-reveal2"></div>
+  </div>
+  <div id="word-card3" style="display:none;position:absolute;left:38%;z-index:18;pointer-events:none;will-change:transform;transform:translate(-50%,-50%) scale(.06);">
+    <div class="card-frame"><svg class="fsv" id="frame-svg3" viewBox="0 0 156 156"></svg>
+    <span class="card-char" id="card-char3"></span></div>
+    <div class="card-reveal" id="card-reveal3"></div>
+  </div>
   <div id="hit-flash"></div>
   <div id="answer-zone">
     <button class="ans-btn" id="btn-x" onclick="answer('象形')">🪨 象形</button>
@@ -353,6 +364,7 @@ canvas#road{position:absolute;top:0;left:0;z-index:0;display:block;}
 </div>
 
 <!-- ── RESULT ── -->
+<canvas id="fw-canvas"></canvas>
 <div id="result-screen" class="screen hidden">
   <div class="res-title" id="res-title">RACE OVER!</div>
   <div class="res-box"><div class="res-num" id="res-score">0</div><div class="res-lbl">TOTAL SCORE</div></div>
@@ -1929,6 +1941,112 @@ function drawRoad(sc, pause) {
   ctx.fillStyle=fog;ctx.fillRect(0,VPY-12,W,67);
 }
 
+
+// ════════════════════════════════════════════════════
+// FINISH LINE ANIMATION
+// ════════════════════════════════════════════════════
+function drawFinishLine() {
+  const totalFrames = 180; // 3 seconds at 60fps
+  const prog = 1 - finishAnim / totalFrames; // 0 → 1 as animation plays
+  finishAnim--;
+
+  // --- Finish line approaches from vanishing point to near camera ---
+  // At prog=0: tiny at horizon. At prog=1: fills the road near bottom.
+  const cvx = W * 0.5;
+  const ease = prog * prog * (3 - 2 * prog); // smoothstep
+
+  // Road perspective: line starts at VPY (horizon) and sweeps to ROAD_H
+  const lineY = VPY + (ROAD_H - VPY) * ease;
+  // Road width at lineY (perspective)
+  const perspT = (lineY - VPY) / (ROAD_H - VPY);
+  const halfW = W * 0.36 * perspT;
+  const lx = cvx - halfW, rx = cvx + halfW;
+
+  // Checkerboard stripe height scales with perspective
+  const stripeH = Math.max(4, 28 * perspT);
+  const stripeCount = 10;
+  const stripeW = (rx - lx) / stripeCount;
+
+  // Draw 2 rows of checkerboard (black & white)
+  for (let row = 0; row < 2; row++) {
+    for (let col = 0; col < stripeCount; col++) {
+      const isBlack = (row + col) % 2 === 0;
+      ctx.fillStyle = isBlack ? 'rgba(0,0,0,.95)' : 'rgba(255,255,255,.95)';
+      const x = lx + col * stripeW;
+      const y = lineY - stripeH * (2 - row);
+      ctx.fillRect(x, y, stripeW + 0.5, stripeH + 0.5);
+    }
+  }
+
+  // White border lines on each side of finish line
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = Math.max(1.5, 4 * perspT);
+  ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(lx, lineY - stripeH*2); ctx.lineTo(lx, lineY); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(rx, lineY - stripeH*2); ctx.lineTo(rx, lineY); ctx.stroke();
+
+  // Vertical poles at road edges (at full approach)
+  if (prog > 0.5) {
+    const poleH = (ROAD_H - lineY) * 0.8 + stripeH * 2;
+    const poleProg = (prog - 0.5) * 2;
+    const poleAlpha = Math.min(1, poleProg * 2);
+    ctx.globalAlpha = poleAlpha;
+    // Left pole
+    ctx.fillStyle = '#cc0000';
+    ctx.fillRect(lx - 8 * perspT, lineY - poleH, 8 * perspT, poleH + stripeH * 2);
+    // Right pole
+    ctx.fillRect(rx, lineY - poleH, 8 * perspT, poleH + stripeH * 2);
+    // Horizontal banner at top of poles
+    const bannerY = lineY - poleH;
+    const bannerH = Math.max(6, 22 * perspT);
+    const bCount = 12;
+    const bW = (rx + 8 * perspT - lx) / bCount;
+    for (let b = 0; b < bCount; b++) {
+      ctx.fillStyle = b % 2 === 0 ? '#ff2020' : '#ffffff';
+      ctx.fillRect(lx + b * bW, bannerY, bW + 0.5, bannerH);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // "FINISH" text floating above (fades in from prog 0.55)
+  if (prog > 0.55) {
+    const txtProg = Math.min(1, (prog - 0.55) * 4);
+    const txtY = lineY - stripeH * 4 - 18 * perspT;
+    const txtSize = Math.max(10, 44 * perspT);
+    ctx.save();
+    ctx.globalAlpha = txtProg;
+    ctx.font = `900 ${txtSize}px 'Arial Black', Arial, sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillStyle = '#ffd040';
+    ctx.shadowColor = 'rgba(255,100,0,.85)'; ctx.shadowBlur = 18;
+    ctx.fillText('FINISH', cvx, txtY);
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = '#ff4000'; ctx.lineWidth = 2;
+    ctx.strokeText('FINISH', cvx, txtY);
+    ctx.restore();
+  }
+
+  // Confetti burst when line nearly passes camera
+  if (prog > 0.85 && prog < 0.92) {
+    for (let cf = 0; cf < 8; cf++) {
+      const cfx = lx + Math.random() * (rx - lx);
+      const cfy = lineY - Math.random() * stripeH * 3;
+      ctx.fillStyle = ['#ff4040','#ffd040','#40ff80','#40c0ff','#ff80ff'][Math.floor(Math.random()*5)];
+      ctx.globalAlpha = 0.8;
+      ctx.fillRect(cfx, cfy, 5, 8);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // Screen flash when line passes camera (prog ~0.92-1.0)
+  if (prog > 0.88) {
+    const flashA = Math.max(0, (prog - 0.88) / 0.12);
+    ctx.fillStyle = `rgba(255,255,255,${flashA * 0.45})`;
+    ctx.fillRect(0, 0, W, ROAD_H);
+  }
+}
+
 // ════════════════════════════════════════════════════
 // DASHBOARD
 // ════════════════════════════════════════════════════
@@ -2102,11 +2220,8 @@ function drawDashboardCar() {
   var TR = sBX - cW * 0.5;
   var TW = Math.max(20, TR-TL);
 
-  // Car position mirrors cardProg exactly — appear, move, and hit sign at same time as word
-  if(cardActive && !bossPaused && carCrash===0){
-    carProgress = cardProg;
-    carX = TL + carProgress * TW;
-  }
+  // Car stays fixed at left — road dashes move (roadOffset drives the illusion)
+  // carX not used — car is drawn directly at TL (fixed)
 
   // Crash animation values
   var prog = carCrash>0 ? 1-carCrash/52 : 0;
@@ -2193,54 +2308,44 @@ function drawDashboardCar() {
   ctx.beginPath(); ctx.rect(0,SY-1,W,SH+2); ctx.clip();
 
   if(carCrash>0){
-    var ea6=prog*prog;
-    var sX6=carCrashX>0?carCrashX:TL;
-    var cCX6=Math.min(sX6+ea6*(TR-sX6),TR);
-    var atS6=cCX6>=TR-1;
-    var cp6=atS6?Math.max(0,prog-0.34):0;
-    var sq6=Math.max(0.35,1-cp6*0.84);
-    var bl6=1+cp6*0.46;
+    // Car stays near left — shakes slightly, sparks burst from front
+    var crashX = TL;
+    var cp6 = Math.max(0, prog-0.30);
+    var shakeR = prog < 0.5 ? (Math.random()-0.5)*0.08 : 0;
+
     ctx.save();
-    ctx.translate(cCX6,cY+cH*0.5);
-    ctx.scale(sq6,bl6);
-    if(atS6&&prog>0.42)ctx.rotate((Math.random()-0.5)*0.14);
-    drawMiniCar(ctx,0,0,cW,cH,atS6,cp6);
+    ctx.translate(crashX, cY+cH*0.5);
+    ctx.rotate(shakeR);
+    drawMiniCar(ctx, 0, 0, cW, cH, cp6>0, cp6);
     ctx.restore();
+
     carSparks.forEach(function(sp){
       sp.x+=sp.vx; sp.y+=sp.vy; sp.vy+=0.32; sp.life-=0.024;
       if(sp.life>0){
         ctx.globalAlpha=sp.life;
         ctx.fillStyle=sp.col;
         ctx.beginPath();
-        ctx.arc(cCX6+cW*sq6*0.50+sp.x,cY+cH*0.30+sp.y,sp.r*Math.max(0.05,sp.life),0,Math.PI*2);
+        ctx.arc(crashX+cW*0.5+sp.x, cY+cH*0.30+sp.y, sp.r*Math.max(0.05,sp.life), 0, Math.PI*2);
         ctx.fill();
       }
     });
     ctx.globalAlpha=1;
-    if(atS6){
-      for(var sm6=0;sm6<5;sm6++){
-        var smA6=Math.min(0.58,(prog-0.20)*0.95-sm6*0.07);
-        if(smA6<=0)continue;
-        ctx.globalAlpha=smA6;
-        ctx.fillStyle='hsl(0,0%,'+(50+sm6*10)+'%)';
-        ctx.beginPath();
-        ctx.arc(cCX6+cW*sq6*0.50+sm6*12-8,cY-sm6*8+6,8+sm6*7+prog*15,0,Math.PI*2);
-        ctx.fill();
-      }
-      ctx.globalAlpha=1;
+    for(var sm6=0;sm6<4;sm6++){
+      var smA6=Math.min(0.50,(prog-0.15)*0.85-sm6*0.07);
+      if(smA6<=0)continue;
+      ctx.globalAlpha=smA6;
+      ctx.fillStyle='hsl(0,0%,'+(52+sm6*10)+'%)';
+      ctx.beginPath();
+      ctx.arc(crashX+cW*0.4+sm6*9-5, cY-sm6*7+3, 5+sm6*5+prog*9, 0, Math.PI*2);
+      ctx.fill();
     }
+    ctx.globalAlpha=1;
     carCrash--;
-    if(carCrash<=0){carX=0;carSparks=[];}
+    if(carCrash<=0){carSparks=[];}
 
-  }else if(cardActive && carX>0){
-    // Visible ONLY while this word's card is active (one car per word)
-    drawMiniCar(ctx,carX,cY,cW,cH,false,0);
-    var bL6=cW*(0.18+gameSpeed*0.10);
-    var bA6=Math.min(0.20,0.03+gameSpeed*0.05);
-    ctx.fillStyle='rgba(255,55,0,'+bA6+')';
-    ctx.fillRect(carX-cW*0.5-bL6,cY+cH*0.28,bL6,cH*0.14);
-    ctx.fillStyle='rgba(255,80,0,'+(bA6*0.35)+')';
-    ctx.fillRect(carX-cW*0.5-bL6*1.8,cY+cH*0.22,bL6*0.48,cH*0.26);
+  }else if(gameRunning){
+    // Car PARKED at TL — does not move
+    drawMiniCar(ctx, TL, cY, cW, cH, false, 0);
   }
 
   ctx.restore();
@@ -2470,10 +2575,10 @@ function drawSteeringWheel(cx, cy, r) {
 // FRAME SVGs
 // ════════════════════════════════════════════════════
 const FRAMES = {
-  '象形':`<defs><pattern id="sp" patternUnits="userSpaceOnUse" width="10" height="10"><rect width="10" height="10" fill="#C8AA78"/><circle cx="5" cy="5" r=".9" fill="rgba(0,0,0,.07)"/></pattern></defs><rect x="3" y="3" width="150" height="150" rx="9" fill="url(#sp)" stroke="#7A4A18" stroke-width="4.5"/><rect x="13" y="13" width="130" height="130" rx="5" fill="none" stroke="#7A4A18" stroke-width="1.8" stroke-dasharray="4,3"/><g transform="translate(22,22)"><circle r="6" fill="none" stroke="#7A4A18" stroke-width="1.8"/><line x1="0" y1="-9" x2="0" y2="-13" stroke="#7A4A18" stroke-width="1.8" stroke-linecap="round"/><line x1="0" y1="9" x2="0" y2="13" stroke="#7A4A18" stroke-width="1.8" stroke-linecap="round"/><line x1="-9" y1="0" x2="-13" y2="0" stroke="#7A4A18" stroke-width="1.8" stroke-linecap="round"/><line x1="9" y1="0" x2="13" y2="0" stroke="#7A4A18" stroke-width="1.8" stroke-linecap="round"/></g><g transform="translate(134,22)"><ellipse cx="0" cy="0" rx="9" ry="5.5" fill="#7A4A18" opacity=".55"/><path d="M9 0 L16 -5 L16 5Z" fill="#7A4A18" opacity=".55"/></g><g transform="translate(22,134)"><path d="M-10 0 Q0 -8 10 0" stroke="#7A4A18" stroke-width="2" fill="none" stroke-linecap="round"/><line x1="0" y1="0" x2="0" y2="10" stroke="#7A4A18" stroke-width="2" stroke-linecap="round"/></g><g transform="translate(134,134)"><ellipse cx="0" cy="2" rx="5" ry="6" fill="#7A4A18" opacity=".5"/><circle cx="-7" cy="-5" r="2.5" fill="#7A4A18" opacity=".5"/><circle cx="7" cy="-5" r="2.5" fill="#7A4A18" opacity=".5"/></g>`,
+  '象形':`<defs><pattern id="sp1" patternUnits="userSpaceOnUse" width="10" height="10"><rect width="10" height="10" fill="#C8AA78"/><circle cx="5" cy="5" r=".9" fill="rgba(0,0,0,.07)"/></pattern></defs><rect x="3" y="3" width="150" height="150" rx="9" fill="url(#sp1)" stroke="#7A4A18" stroke-width="4.5"/><rect x="13" y="13" width="130" height="130" rx="5" fill="none" stroke="#7A4A18" stroke-width="1.8" stroke-dasharray="4,3"/><g transform="translate(22,22)"><circle r="6" fill="none" stroke="#7A4A18" stroke-width="1.8"/><line x1="0" y1="-9" x2="0" y2="-13" stroke="#7A4A18" stroke-width="1.8" stroke-linecap="round"/><line x1="0" y1="9" x2="0" y2="13" stroke="#7A4A18" stroke-width="1.8" stroke-linecap="round"/><line x1="-9" y1="0" x2="-13" y2="0" stroke="#7A4A18" stroke-width="1.8" stroke-linecap="round"/><line x1="9" y1="0" x2="13" y2="0" stroke="#7A4A18" stroke-width="1.8" stroke-linecap="round"/></g><g transform="translate(134,22)"><ellipse cx="0" cy="0" rx="9" ry="5.5" fill="#7A4A18" opacity=".55"/><path d="M9 0 L16 -5 L16 5Z" fill="#7A4A18" opacity=".55"/></g><g transform="translate(22,134)"><path d="M-10 0 Q0 -8 10 0" stroke="#7A4A18" stroke-width="2" fill="none" stroke-linecap="round"/><line x1="0" y1="0" x2="0" y2="10" stroke="#7A4A18" stroke-width="2" stroke-linecap="round"/></g><g transform="translate(134,134)"><ellipse cx="0" cy="2" rx="5" ry="6" fill="#7A4A18" opacity=".5"/><circle cx="-7" cy="-5" r="2.5" fill="#7A4A18" opacity=".5"/><circle cx="7" cy="-5" r="2.5" fill="#7A4A18" opacity=".5"/></g>`,
   '指事':`<rect x="3" y="3" width="150" height="150" rx="5" fill="#F5EDD0" stroke="#3A7AB0" stroke-width="4.5"/><rect x="0" y="0" width="156" height="19" rx="9.5" fill="#E0D0A8" stroke="#3A7AB0" stroke-width="3"/><rect x="0" y="137" width="156" height="19" rx="9.5" fill="#E0D0A8" stroke="#3A7AB0" stroke-width="3"/><circle cx="9" cy="9.5" r="3.5" fill="#3A7AB0" opacity=".4"/><circle cx="147" cy="9.5" r="3.5" fill="#3A7AB0" opacity=".4"/><circle cx="9" cy="146.5" r="3.5" fill="#3A7AB0" opacity=".4"/><circle cx="147" cy="146.5" r="3.5" fill="#3A7AB0" opacity=".4"/><line x1="9" y1="30" x2="9" y2="42" stroke="#3A7AB0" stroke-width="2.2" stroke-linecap="round"/><line x1="9" y1="48" x2="9" y2="60" stroke="#3A7AB0" stroke-width="2.2" stroke-linecap="round"/><line x1="9" y1="66" x2="9" y2="78" stroke="#3A7AB0" stroke-width="2.2" stroke-linecap="round"/><line x1="9" y1="84" x2="9" y2="96" stroke="#3A7AB0" stroke-width="2.2" stroke-linecap="round"/><line x1="4" y1="100" x2="14" y2="84" stroke="#3A7AB0" stroke-width="2" stroke-linecap="round"/><line x1="147" y1="30" x2="147" y2="42" stroke="#3A7AB0" stroke-width="2.2" stroke-linecap="round"/><line x1="147" y1="48" x2="147" y2="60" stroke="#3A7AB0" stroke-width="2.2" stroke-linecap="round"/><line x1="147" y1="66" x2="147" y2="78" stroke="#3A7AB0" stroke-width="2.2" stroke-linecap="round"/><line x1="147" y1="84" x2="147" y2="96" stroke="#3A7AB0" stroke-width="2.2" stroke-linecap="round"/><line x1="152" y1="100" x2="142" y2="84" stroke="#3A7AB0" stroke-width="2" stroke-linecap="round"/><g transform="translate(29,29)"><line x1="-5.5" y1="0" x2="5.5" y2="0" stroke="#3A7AB0" stroke-width="1.8"/><line x1="0" y1="-5.5" x2="0" y2="5.5" stroke="#3A7AB0" stroke-width="1.8"/><line x1="-3.9" y1="-3.9" x2="3.9" y2="3.9" stroke="#3A7AB0" stroke-width="1.4"/><line x1="3.9" y1="-3.9" x2="-3.9" y2="3.9" stroke="#3A7AB0" stroke-width="1.4"/></g><g transform="translate(127,29)"><line x1="-5.5" y1="0" x2="5.5" y2="0" stroke="#3A7AB0" stroke-width="1.8"/><line x1="0" y1="-5.5" x2="0" y2="5.5" stroke="#3A7AB0" stroke-width="1.8"/></g><g transform="translate(29,127)"><line x1="-5.5" y1="0" x2="5.5" y2="0" stroke="#3A7AB0" stroke-width="1.8"/><line x1="0" y1="-5.5" x2="0" y2="5.5" stroke="#3A7AB0" stroke-width="1.8"/></g><g transform="translate(127,127)"><line x1="-5.5" y1="0" x2="5.5" y2="0" stroke="#3A7AB0" stroke-width="1.8"/><line x1="0" y1="-5.5" x2="0" y2="5.5" stroke="#3A7AB0" stroke-width="1.8"/></g>`,
   '會意':`<rect x="3" y="3" width="150" height="150" rx="18" fill="#EAD8A8" stroke="#7A4AA0" stroke-width="4.5"/><rect x="13" y="13" width="130" height="130" rx="12" fill="none" stroke="#7A4AA0" stroke-width="1.8"/><g transform="translate(19,19)"><path d="M0 17 Q4 7 17 0" stroke="#4A8A3A" stroke-width="2" fill="none" stroke-linecap="round"/><ellipse cx="8" cy="6" rx="5.5" ry="3.2" transform="rotate(-40,8,6)" fill="#5AA050" opacity=".7"/><ellipse cx="15" cy="3" rx="4.5" ry="2.8" transform="rotate(-15,15,3)" fill="#4A9040" opacity=".65"/></g><g transform="translate(137,19) scale(-1,1)"><path d="M0 17 Q4 7 17 0" stroke="#4A8A3A" stroke-width="2" fill="none" stroke-linecap="round"/><ellipse cx="8" cy="6" rx="5.5" ry="3.2" transform="rotate(-40,8,6)" fill="#5AA050" opacity=".7"/></g><g transform="translate(19,137) scale(1,-1)"><path d="M0 17 Q4 7 17 0" stroke="#4A8A3A" stroke-width="2" fill="none" stroke-linecap="round"/><ellipse cx="8" cy="6" rx="5.5" ry="3.2" transform="rotate(-40,8,6)" fill="#5AA050" opacity=".7"/></g><g transform="translate(137,137) scale(-1,-1)"><path d="M0 17 Q4 7 17 0" stroke="#4A8A3A" stroke-width="2" fill="none" stroke-linecap="round"/><ellipse cx="8" cy="6" rx="5.5" ry="3.2" transform="rotate(-40,8,6)" fill="#5AA050" opacity=".7"/></g><circle cx="78" cy="7" r="4" fill="#C868C8" opacity=".5"/><circle cx="78" cy="149" r="4" fill="#C868C8" opacity=".5"/><circle cx="7" cy="78" r="4" fill="#C868C8" opacity=".5"/><circle cx="149" cy="78" r="4" fill="#C868C8" opacity=".5"/>`,
-  '形聲':`<defs><pattern id="bp" patternUnits="userSpaceOnUse" width="14" height="14"><rect width="14" height="14" fill="#D8E8A8"/><line x1="0" y1="7" x2="14" y2="7" stroke="#B8D888" stroke-width=".8"/></pattern></defs><rect x="3" y="3" width="150" height="150" rx="7" fill="url(#bp)" stroke="#2A7040" stroke-width="4.5"/><rect x="3" y="73" width="150" height="10" rx="5" fill="#2A7040" opacity=".25"/><rect x="3" y="73" width="150" height="10" rx="5" fill="none" stroke="#2A7040" stroke-width="1.5"/><g transform="translate(19,19)"><circle r="9" fill="none" stroke="#2A7040" stroke-width="2.2"/><circle r="3.5" fill="#2A7040" opacity=".35"/><circle r="1.4" fill="#2A7040"/></g><g transform="translate(137,19)"><circle r="9" fill="none" stroke="#2A7040" stroke-width="2.2"/><circle r="1.4" fill="#2A7040"/></g><g transform="translate(19,137)"><circle r="9" fill="none" stroke="#2A7040" stroke-width="2.2"/><circle r="1.4" fill="#2A7040"/></g><g transform="translate(137,137)"><circle r="9" fill="none" stroke="#2A7040" stroke-width="2.2"/><circle r="1.4" fill="#2A7040"/></g><path d="M7 53 Q13 63 7 73 Q13 83 7 93" stroke="#2A7040" stroke-width="2.2" fill="none" stroke-linecap="round"/><path d="M149 53 Q143 63 149 73 Q143 83 149 93" stroke="#2A7040" stroke-width="2.2" fill="none" stroke-linecap="round"/><path d="M38 8 Q53 14 68 8 Q83 2 98 8 Q113 14 118 8" stroke="#2A7040" stroke-width="1.8" fill="none" stroke-linecap="round"/><path d="M38 148 Q53 142 68 148 Q83 154 98 148 Q113 142 118 148" stroke="#2A7040" stroke-width="1.8" fill="none" stroke-linecap="round"/>`,
+  '形聲':`<defs><pattern id="bp1" patternUnits="userSpaceOnUse" width="14" height="14"><rect width="14" height="14" fill="#D8E8A8"/><line x1="0" y1="7" x2="14" y2="7" stroke="#B8D888" stroke-width=".8"/></pattern></defs><rect x="3" y="3" width="150" height="150" rx="7" fill="url(#bp1)" stroke="#2A7040" stroke-width="4.5"/><rect x="3" y="73" width="150" height="10" rx="5" fill="#2A7040" opacity=".25"/><rect x="3" y="73" width="150" height="10" rx="5" fill="none" stroke="#2A7040" stroke-width="1.5"/><g transform="translate(19,19)"><circle r="9" fill="none" stroke="#2A7040" stroke-width="2.2"/><circle r="3.5" fill="#2A7040" opacity=".35"/><circle r="1.4" fill="#2A7040"/></g><g transform="translate(137,19)"><circle r="9" fill="none" stroke="#2A7040" stroke-width="2.2"/><circle r="1.4" fill="#2A7040"/></g><g transform="translate(19,137)"><circle r="9" fill="none" stroke="#2A7040" stroke-width="2.2"/><circle r="1.4" fill="#2A7040"/></g><g transform="translate(137,137)"><circle r="9" fill="none" stroke="#2A7040" stroke-width="2.2"/><circle r="1.4" fill="#2A7040"/></g><path d="M7 53 Q13 63 7 73 Q13 83 7 93" stroke="#2A7040" stroke-width="2.2" fill="none" stroke-linecap="round"/><path d="M149 53 Q143 63 149 73 Q143 83 149 93" stroke="#2A7040" stroke-width="2.2" fill="none" stroke-linecap="round"/><path d="M38 8 Q53 14 68 8 Q83 2 98 8 Q113 14 118 8" stroke="#2A7040" stroke-width="1.8" fill="none" stroke-linecap="round"/><path d="M38 148 Q53 142 68 148 Q83 154 98 148 Q113 142 118 148" stroke="#2A7040" stroke-width="1.8" fill="none" stroke-linecap="round"/>`,
 };
 
 // ════════════════════════════════════════════════════
@@ -2722,6 +2827,11 @@ let correctCount=0,wrongCount=0,total=0;
 let curChar=null,cardActive=false,gameRunning=false,bossPaused=false;
 let cardProg=0,cardSpd=0,cardAF=null,timerInt=null,rafId=null;
 let cardPhase=0,nextBossAt=5,sceneSwitchAt=8,sceneRound=0;
+let finishAnim=0; // >0 = finish line animation running (frames countdown)
+// Multi-card support (round 2 = 2 cards, round 3 = 3 cards)
+let activeCards=[];   // array of {char, prog, spd, phase, el, answered}
+let pendingQueue=[];  // chars waiting to appear
+let multiMode=1;      // 1, 2, or 3 cards at once
 const BOSS_INTERVAL = 5; // answer N correct to trigger boss
 
 // ════════════════════════════════════════════════════
@@ -2736,6 +2846,7 @@ function renderLoop() {
   }
   updateProps(sc.id, pause);
   drawRoad(sc, pause);
+  if(finishAnim > 0) drawFinishLine();
   drawDashboard();
   rafId = requestAnimationFrame(renderLoop);
 }
@@ -2765,7 +2876,9 @@ function startGame(){
   nextBossAt=BOSS_INTERVAL;sceneIdx=0;sceneSwitchAt=8;sceneRound=0;
   props=[];roadOffset=0;roadCurve=0;roadCurveTarget=0;roadCurveTimer=0;
   gameSpeed=1.0;displaySpeed=0;warningFlash=0;
-  carX=0;carCrash=0;carSparks=[];carProgress=0;
+  carCrash=0;carSparks=[];carProgress=0;carX=0;
+  cardQueue=[];multiMode=1;hideAllCards();
+  finishAnim=0;
   // Reset boss principle queue and speech counters
   globalPrincipleQueue = [];
   Object.values(SCENE_BOSSES).forEach(b=>{ b._speechIdx=0; });
@@ -2799,136 +2912,241 @@ function startGame(){
 
   setTimeout(spawnCard,500);
 }
-function retryGame(){startGame();}
+function retryGame(){stopFireworks();startGame();}
 
 // ════════════════════════════════════════════════════
 // CARD
 // ════════════════════════════════════════════════════
 function spawnCard(){
   if(!gameRunning||lives<=0||bossPaused)return;
-  cancelAnimationFrame(cardAF); cardActive=true;
-  const pool=CHARS.filter(c=>c!==curChar);
-  curChar=pool[Math.floor(Math.random()*pool.length)];
-  total++;
-  document.getElementById('card-char').textContent=curChar.char;
-  document.getElementById('frame-svg').innerHTML=FRAMES[curChar.type];
-  const rev=document.getElementById('card-reveal');
-  rev.textContent=curChar.type+' '+curChar.emoji; rev.style.opacity='0';
-  const wc=document.getElementById('word-card');
-  wc.className=''; wc.style.top=(VPY/H*100)+'%';
-  wc.style.transform='translate(-50%,-50%) scale(.06)';
-  wc.style.filter='none'; wc.style.opacity='1';
-  cardProg=0; cardPhase=Math.random()*Math.PI*2;
-  // Reset car to left start for this new word - cancel any crash animation
-  carCrash=0; carSparks=[]; carX=0; carProgress=0;
-  // Speed scales with total correct answers answered (gets harder over time)
-  // Word flies faster (≈3-4 sec per question), car is synced to cardProg so they collide together
-  // Word takes exactly 5 seconds at 60fps (1/300 per frame)
-  // Base 5 seconds (1/300), gets faster each completed scene round
-  // Round 0: 5s, Round 1: ~4s, Round 2: ~3.2s, etc.
-  const roundSpeedMult = 1 + sceneRound * 0.25;
-  cardSpd = (1 / 300) * roundSpeedMult;
+  carCrash=0; carSparks=[]; carProgress=0; cardActive=true;
+
+  const n = multiMode || 1;
+  const speedTable=[1.0,1.25,1.65]; const roundSpeedMult=speedTable[Math.min(sceneRound,2)];
+  const spd = (1/300) * roundSpeedMult;
+  total += n;
+
+  // Pick n distinct chars
+  const usedTypes = new Set();
+  const chars = [];
+  const pool = CHARS.slice().sort(()=>Math.random()-.5);
+  for(const c of pool){
+    if(chars.length >= n) break;
+    if(c !== curChar && !chars.includes(c)) chars.push(c);
+  }
+  curChar = chars[0]; // primary char for compat
+
+  // Update cardProg/cardSpd for legacy missCard compat
+  cardProg=0; cardPhase=Math.random()*Math.PI*2; cardSpd=spd;
+
+  // Hide all card slots first
+  hideAllCards();
+
+  // Launch all cards simultaneously via initCardQueue
+  initCardQueue(chars, spd);
+
   // Update boss progress bar
-  const progressInCycle=(correctCount%(BOSS_INTERVAL))/BOSS_INTERVAL*100;
-  document.getElementById('prog-bar').style.width=progressInCycle+'%';
-  cardAF=requestAnimationFrame(cardStep);
+  // Progress bar only relevant for boss (rounds 1-2)
+  if(sceneRound < 2){
+    const progressInCycle=(correctCount%(BOSS_INTERVAL))/BOSS_INTERVAL*100;
+    document.getElementById('prog-bar').style.width=progressInCycle+'%';
+  } else {
+    document.getElementById('prog-bar').style.width='0%';
+  }
 }
 
-function cardStep(){
-  if(!cardActive)return;
-  if(bossPaused){cardAF=requestAnimationFrame(cardStep);return;}
-  cardProg=Math.min(1,cardProg+cardSpd);
-  const wc=document.getElementById('word-card');
-  if(!wc)return;
-  const vpPct=VPY/H*100;
-  // Target topPct: card bottom edge (center + scale*78) just reaches dashboard top (ROAD_H) at cardProg=1
-  const scMax=0.06+1.44; // scale at cardProg=1
-  const targetTopPct=Math.min(72,(ROAD_H-scMax*78)/H*100);
-  const topPct=vpPct+(targetTopPct-vpPct)*cardProg;
-  const sc=0.06+cardProg*1.44;
-  const damp=Math.max(0,1-cardProg*1.1);
-  const wx=Math.sin(cardProg*16+cardPhase)*32*damp;
-  const wy=Math.cos(cardProg*10+cardPhase*1.3)*12*damp;
-  wc.style.top=topPct+'%';
-  wc.style.transform=`translate(calc(-50% + ${wx.toFixed(1)}px), calc(-50% + ${wy.toFixed(1)}px)) scale(${sc.toFixed(3)})`;
-  wc.style.filter='none';
-  if(cardProg>0.62)wc.classList.add('warning');else wc.classList.remove('warning');
-  // Miss only when fully arrived (cardProg reaches 1 = card bottom touches dashboard top)
-  if(cardProg>=1){missCard();return;}
-  cardAF=requestAnimationFrame(cardStep);
+// ── MULTI-CARD QUEUE (round 2 = 2 cards, round 3 = 3 cards) ──
+// cardSlots: 3 pre-defined DOM slots (word-card, word-card2, word-card3)
+// Each slot has: id, charId, frameId, revealId, leftPct
+const CARD_SLOTS = [
+  {id:'word-card',   charId:'card-char',  frameId:'frame-svg',  revId:'card-reveal',  leftPcts:[50, 40, 33]},
+  {id:'word-card2',  charId:'card-char2', frameId:'frame-svg2', revId:'card-reveal2', leftPcts:[50, 62, 50]},
+  {id:'word-card3',  charId:'card-char3', frameId:'frame-svg3', revId:'card-reveal3', leftPcts:[50, 50, 67]},
+];
+
+// queue: array of {char, slotIdx, prog, phase, spd, answered, raf}
+let cardQueue = [];
+let activeSlot = 0; // index into cardQueue of the card currently answerable
+
+function initCardQueue(chars, spd) {
+  cardQueue.forEach(q => { if(q.raf) cancelAnimationFrame(q.raf); });
+  cardQueue = [];
+  activeSlot = 0;
+  const n = chars.length;
+
+  // Stagger delays: round2 = [0, 1000-2000ms], round3 = [0, 1000-2000ms, 2000-4000ms]
+  const delays = [0];
+  for(let i=1;i<n;i++){
+    delays.push(delays[i-1] + 1000 + Math.random()*1000); // 1-2s gap each
+  }
+
+  chars.forEach((ch, i) => {
+    const slot = CARD_SLOTS[i];
+    const el = document.getElementById(slot.id);
+    const leftPct = slot.leftPcts[n-1];
+
+    document.getElementById(slot.charId).textContent = ch.char;
+    document.getElementById(slot.frameId).innerHTML = FRAMES[ch.type];
+    const rev = document.getElementById(slot.revId);
+    rev.textContent = ch.type + ' ' + ch.emoji; rev.style.opacity = '0';
+
+    // Hide initially; will show after delay
+    el.style.display = 'none';
+    el.style.left = leftPct + '%';
+    el.className = '';
+    el.style.top = (VPY/H*100) + '%';
+    el.style.transform = 'translate(-50%,-50%) scale(.06)';
+    el.style.filter = 'none'; el.style.opacity = '1';
+
+    const obj = {
+      char: ch, slotIdx: i, el: el,
+      charEl: document.getElementById(slot.charId), revEl: rev,
+      prog: 0, phase: Math.random()*Math.PI*2,
+      spd: spd, answered: false, raf: null, started: false
+    };
+    cardQueue.push(obj);
+
+    // Launch this card after its stagger delay
+    setTimeout(() => {
+      if(!gameRunning || bossPaused) return;
+      obj.started = true;
+      el.style.display = 'block';
+      // All cards visible simultaneously — no dimming, all active
+      el.style.filter = 'none';
+
+      function step() {
+        if(!gameRunning || obj.answered) return;
+        if(bossPaused) { obj.raf = requestAnimationFrame(step); return; }
+        obj.prog = Math.min(1, obj.prog + obj.spd);
+        const vpPct = VPY/H*100;
+        const targetTopPct = Math.min(72,(ROAD_H-(0.06+1.44)*78)/H*100);
+        const topPct = vpPct + (targetTopPct-vpPct)*obj.prog;
+        const sc = 0.06 + obj.prog*1.44;
+        const damp = Math.max(0,1-obj.prog*1.1);
+        const wx = Math.sin(obj.prog*16+obj.phase)*32*damp;
+        const wy = Math.cos(obj.prog*10+obj.phase*1.3)*12*damp;
+        el.style.top = topPct+'%';
+        el.style.transform = `translate(calc(-50% + ${wx.toFixed(1)}px),calc(-50% + ${wy.toFixed(1)}px)) scale(${sc.toFixed(3)})`;
+        if(obj.prog>0.62) el.classList.add('warning'); else el.classList.remove('warning');
+        if(obj.prog>=1){
+          obj.answered = true;
+          triggerCarCrash(); playImpactThud();
+          el.classList.remove('warning');
+          el.style.transition='opacity .25s'; el.style.opacity='0.08';
+          setTimeout(()=>{ el.style.transition=''; el.style.opacity='1'; el.style.display='none'; },300);
+          combo=0; document.getElementById('streak-el').style.opacity='0';
+          loseLife();
+          showHint('太慢啦！'+ch.char+' 是「'+ch.type+'」— '+ch.hint,'#ff8060');
+          checkAllCardsDone();
+          return;
+        }
+        obj.raf = requestAnimationFrame(step);
+      }
+      obj.raf = requestAnimationFrame(step);
+    }, delays[i]);
+  });
 }
 
-function missCard(){
-  // carX is at travelR right now (cardProg=1) — capture before clearing cardActive
-  triggerCarCrash();
-  playImpactThud(); // word hits dashboard — impact sound
-  cancelAnimationFrame(cardAF); cardActive=false;
-  combo=0; document.getElementById('streak-el').style.opacity='0';
-  loseLife();
-  showHint('太慢啦！'+curChar.char+' 是「'+curChar.type+'」— '+curChar.hint,'#ff8060');
-  const wc=document.getElementById('word-card');
-  wc.classList.remove('warning'); wc.style.transition='opacity .25s'; wc.style.opacity='0.08';
-  setTimeout(()=>{wc.style.transition='';wc.style.opacity='1';},300);
-  if(lives>0)setTimeout(spawnCard,920);
+function checkAllCardsDone() {
+  const allDone = cardQueue.every(q => q.answered);
+  if (allDone && gameRunning && lives > 0) {
+    setTimeout(spawnCard, 800);
+  }
 }
+
+function answerCurrentCard(type) {
+  // Find first unanswered card
+  // Find the first STARTED and unanswered card (the one that's actually flying)
+  const obj = cardQueue.find(q => !q.answered && q.started);
+  if (!obj) return false;
+  const ok = (type === obj.char.type);
+  if (ok) {
+    obj.answered = true;
+    if (obj.raf) cancelAnimationFrame(obj.raf);
+    combo++; if(combo>maxCombo) maxCombo=combo;
+    const distMult = Math.max(1.0, 3.0 - obj.prog * 2.0);
+    const comboBonus = combo >= 2 ? (combo-1)*5 : 0;
+    const pts = Math.round(20*distMult) + comboBonus;
+    score += pts; correctCount++;
+    gameSpeed = Math.min(3.2, gameSpeed+.14);
+    document.getElementById('score-el').textContent = score;
+    obj.revEl.style.opacity = '1';
+    obj.el.classList.remove('warning'); obj.el.classList.add('burst');
+    setTimeout(()=>{
+      obj.el.classList.remove('burst');
+      obj.el.style.transform=''; obj.el.style.filter='';
+      obj.el.style.display = 'none';
+      obj.revEl.style.opacity = '0';
+    }, 350);
+    showScorePop('+'+pts,'#ffd040'); spawnParticles('#ffd040');
+    flashBtn(type,'correct-flash');
+    showHint(obj.char.emoji+' '+obj.char.char+'！'+obj.char.hint,'#80ff80');
+    if(combo>=3){document.getElementById('combo-num').textContent=combo;document.getElementById('streak-el').style.opacity='1';}
+    playBeep(880,.11);
+    // Highlight next unanswered card
+    const next = cardQueue.find(q => !q.answered);
+    if (next) { next.el.style.filter = 'none'; }
+    // Scene / boss progress
+    if(correctCount>=sceneSwitchAt){
+      sceneIdx++;
+      if(sceneIdx>0 && sceneIdx%SCENES.length===0){
+        sceneRound++;
+        multiMode = sceneRound>=2?3:sceneRound>=1?2:1;
+        const msgs=['','第二輪！同時兩個字！🔥','第三輪！同時三個字！🔥🔥'];
+        showHint('🔄 '+msgs[Math.min(sceneRound,2)],'#ff8040');
+        if(sceneRound>=3) setTimeout(()=>showSuperChampion(),1200);
+      }
+      // More chars per scene as rounds progress
+      var perScene = sceneRound >= 2 ? 14 : sceneRound >= 1 ? 10 : 8;
+      sceneSwitchAt += perScene; props=[];
+      document.getElementById('scene-el').textContent=SCENES[sceneIdx%SCENES.length].label;
+    }
+    if(correctCount>=nextBossAt){
+      nextBossAt+=BOSS_INTERVAL;
+      if(sceneRound < 2){
+        // Only trigger boss in rounds 1 and 2; round 3 = pure character challenge
+        document.getElementById('prog-bar').style.width='100%';
+        setTimeout(triggerBoss,460);
+      }
+    }
+    checkAllCardsDone();
+    return true;
+  } else {
+    // Wrong answer
+    combo=0; document.getElementById('streak-el').style.opacity='0';
+    wrongCount++; gameSpeed=Math.max(0.6,gameSpeed-.25);
+    playWrongAnswer();
+    triggerCarCrash();
+    loseLife(); shakeScreen(); flashBtn(type,'wrong-flash');
+    showHint('❌ '+obj.char.char+' 是「'+obj.char.type+'」！'+obj.char.hint,'#ff8060');
+    obj.el.classList.remove('warning'); obj.el.classList.add('wrong-drop');
+    setTimeout(()=>{obj.el.classList.remove('wrong-drop');obj.el.style.transform='';obj.el.style.filter='';},370);
+    playCrash();
+    return false;
+  }
+}
+
+function hideAllCards() {
+  CARD_SLOTS.forEach(s => {
+    const el = document.getElementById(s.id);
+    if(el){ el.style.display='none'; el.className=''; }
+  });
+}
+
+
+function cardStep(){} // replaced by initCardQueue's per-card step loops
+
+function missCard(){} // handled by initCardQueue per-card miss
 
 // ════════════════════════════════════════════════════
 // ANSWER
 // ════════════════════════════════════════════════════
 function answer(type){
-  if(!cardActive||!curChar||bossPaused)return;
-  cancelAnimationFrame(cardAF); cardActive=false;
-  const ok=(type===curChar.type), cc=curChar;
-  if(ok){
-    carX=0; carProgress=0; // car disappears and will restart from left on next word
-    combo++; if(combo>maxCombo)maxCombo=combo;
-    // Distance bonus: farther answer (small cardProg) = more pts; closer (large) = fewer pts
-    // Distance bonus: cardProg=0 → 3x, cardProg=1 → 1x (linear)
-    const distMult = Math.max(1.0, 3.0 - cardProg * 2.0);
-    // Combo bonus: +5 pts per consecutive correct (additive, not multiplicative)
-    const comboBonus = combo >= 2 ? (combo - 1) * 5 : 0;
-    const pts = Math.round(20 * distMult) + comboBonus;
-    score += pts; correctCount++;
-    gameSpeed=Math.min(3.2,gameSpeed+.14);
-    document.getElementById('score-el').textContent=score;
-    document.getElementById('card-reveal').style.opacity='1';
-    const wc=document.getElementById('word-card');
-    wc.classList.remove('warning'); wc.classList.add('burst');
-    setTimeout(()=>{wc.classList.remove('burst');wc.style.transform='';wc.style.filter='';document.getElementById('card-reveal').style.opacity='0';},350);
-    showScorePop('+'+pts,'#ffd040'); spawnParticles('#ffd040');
-    flashBtn(type,'correct-flash');
-    showHint(cc.emoji+' '+cc.char+'！'+cc.hint,'#80ff80');
-    if(combo>=3){document.getElementById('combo-num').textContent=combo;document.getElementById('streak-el').style.opacity='1';}
-    playBeep(880,.11);
-    // Scene switch
-    if(correctCount>=sceneSwitchAt){
-      sceneIdx++;
-      // Detect full round completion (every 5 scenes = 40 correct answers)
-      if(sceneIdx>0 && sceneIdx%SCENES.length===0){
-        sceneRound++;
-        showHint('🔄 第'+sceneRound+'輪！難度提升！','#ff8040');
-      }
-      sceneSwitchAt+=8;props=[];
-      document.getElementById('scene-el').textContent=SCENES[sceneIdx%SCENES.length].label;
-    }
-    // Boss check - flash bar to full before triggering
-    if(correctCount>=nextBossAt){
-      document.getElementById('prog-bar').style.width='100%';
-      nextBossAt+=BOSS_INTERVAL;setTimeout(triggerBoss,460);
-    } else setTimeout(spawnCard,480);
-  } else {
-    combo=0; document.getElementById('streak-el').style.opacity='0';
-    wrongCount++; gameSpeed=Math.max(0.6,gameSpeed-.25);
-    playWrongAnswer(); // wrong answer buzzer sound
-    triggerCarCrash(); // car crashes from current mid-road position
-    loseLife(); shakeScreen(); flashBtn(type,'wrong-flash');
-    showHint('❌ '+cc.char+' 是「'+cc.type+'」！'+cc.hint,'#ff8060');
-    const wc=document.getElementById('word-card');
-    wc.classList.remove('warning'); wc.classList.add('wrong-drop');
-    setTimeout(()=>{wc.classList.remove('wrong-drop');wc.style.transform='';wc.style.filter='';},370);
-    playCrash();
-    if(lives>0)setTimeout(spawnCard,960);
-  }
+  if(!gameRunning||bossPaused)return;
+  // Delegate to the new multi-card answer system
+  answerCurrentCard(type);
+  // Also trigger car crash on wrong answer via the wrapper
+  // (answerCurrentCard handles loseLife and crash internally)
 }
 
 // ════════════════════════════════════════════════════
@@ -3082,7 +3300,8 @@ function shuffle(arr){const a=[...arr];for(let i=a.length-1;i>0;i--){const j=Mat
 // DAMAGE / END
 // ════════════════════════════════════════════════════
 function triggerCarCrash(){
-  carCrashX = carX; // carX is already pixel X of car centre
+  // Car is always at fixed left position TL — crash happens there
+  carCrashX = 0; // will use TL in crash animation
   carCrash = 48;
   carSparks = [];
   for(let i=0;i<22;i++){
@@ -3116,12 +3335,143 @@ function saveLeaderboard(lb){
   try{ sessionStorage.setItem('lb', JSON.stringify(lb)); }catch(e){}
 }
 
+
+function _fwInit(){
+  var c=document.getElementById('fw-canvas');
+  if(!c)return null;
+  c.width=window.innerWidth;c.height=window.innerHeight;
+  c.style.display='block';
+  return c;
+}
+var _fwP=[],_fwT=null,_fwR=null;
+function _fwLaunch(c,x,y,cols,n){
+  for(var i=0;i<n;i++){
+    var a=Math.random()*Math.PI*2,s=2+Math.random()*5;
+    _fwP.push({x:x,y:y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,
+      life:1,dec:0.014+Math.random()*0.012,r:2+Math.random()*3,
+      col:cols[Math.floor(Math.random()*cols.length)],tr:[]});
+  }
+}
+function _fwSound(big){
+  try{
+    if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+    var t=audioCtx.currentTime;
+    var buf=audioCtx.createBuffer(1,Math.round(audioCtx.sampleRate*0.28),audioCtx.sampleRate);
+    var d=buf.getChannelData(0);
+    for(var i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,0.5);
+    var src=audioCtx.createBufferSource();src.buffer=buf;
+    var g=audioCtx.createGain();g.gain.setValueAtTime(big?0.60:0.35,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.30);
+    var f=audioCtx.createBiquadFilter();f.type='lowpass';f.frequency.value=big?450:300;
+    src.connect(f);f.connect(g);g.connect(audioCtx.destination);src.start(t);
+    for(var s=0;s<(big?7:4);s++){
+      var o=audioCtx.createOscillator(),gv=audioCtx.createGain();
+      o.frequency.value=700+Math.random()*1400;o.type='sine';
+      gv.gain.setValueAtTime(0,t+s*0.07);gv.gain.linearRampToValueAtTime(big?0.13:0.07,t+s*0.07+0.02);
+      gv.gain.exponentialRampToValueAtTime(0.001,t+s*0.07+0.20);
+      o.connect(gv);gv.connect(audioCtx.destination);o.start(t+s*0.07);o.stop(t+s*0.07+0.22);
+    }
+  }catch(e){}
+}
+function runFireworks(superMode){
+  var c=_fwInit();if(!c)return;
+  var cx=c.getContext('2d');
+  _fwP=[];var cnt=0,max=superMode?30:16;
+  var nc=['#ff4040','#ffd040','#40ff80','#40c0ff','#ff80c0','#ffff80','#ff8040'];
+  var sc=['#ffd700','#ff4500','#ff69b4','#00ffff','#7fff00','#ff1493','#ffffff','#ff6600','#da70d6','#adff2f'];
+  var cols=superMode?sc:nc;
+  function sched(){
+    if(cnt<max){
+      var x=c.width*(0.1+Math.random()*0.80);
+      var y=c.height*(0.08+Math.random()*0.55);
+      _fwLaunch(c,x,y,cols,superMode?140:75);
+      _fwSound(superMode);cnt++;
+      _fwT=setTimeout(sched,superMode?300:480);
+    }
+  }
+  sched();
+  function draw(){
+    cx.clearRect(0,0,c.width,c.height);
+    _fwP=_fwP.filter(function(p){return p.life>0;});
+    _fwP.forEach(function(p){
+      p.tr.push({x:p.x,y:p.y,l:p.life});if(p.tr.length>7)p.tr.shift();
+      p.tr.forEach(function(tr,ti){
+        cx.globalAlpha=(ti/p.tr.length)*p.life*0.35;
+        cx.fillStyle=p.col;cx.beginPath();
+        cx.arc(tr.x,tr.y,p.r*0.45*(ti/p.tr.length),0,Math.PI*2);cx.fill();
+      });
+      cx.globalAlpha=p.life;cx.fillStyle=p.col;
+      cx.beginPath();cx.arc(p.x,p.y,p.r*p.life,0,Math.PI*2);cx.fill();
+      cx.globalAlpha=1;
+      p.x+=p.vx;p.y+=p.vy;p.vy+=0.07;p.vx*=0.98;p.vy*=0.98;p.life-=p.dec;
+    });
+    _fwR=requestAnimationFrame(draw);
+  }
+  _fwR=requestAnimationFrame(draw);
+}
+function stopFireworks(){
+  if(_fwT)clearTimeout(_fwT);
+  if(_fwR)cancelAnimationFrame(_fwR);
+  var c=document.getElementById('fw-canvas');
+  if(c){var cx=c.getContext('2d');cx.clearRect(0,0,c.width,c.height);c.style.display='none';}
+  _fwP=[];
+}
+
+function playFinishLineSound(){
+  try{
+    if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+    const t=audioCtx.currentTime;
+    // Rising fanfare: 4 ascending notes
+    const freqs=[392,494,587,784]; // G4-B4-D5-G5
+    freqs.forEach((f,i)=>{
+      const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+      o.type='triangle'; o.frequency.value=f;
+      g.gain.setValueAtTime(0,t+i*0.18);
+      g.gain.linearRampToValueAtTime(0.28,t+i*0.18+0.05);
+      g.gain.exponentialRampToValueAtTime(0.001,t+i*0.18+0.50);
+      o.connect(g);g.connect(audioCtx.destination);
+      o.start(t+i*0.18);o.stop(t+i*0.18+0.52);
+    });
+    // Low whoosh (tyre squeal feel)
+    const o2=audioCtx.createOscillator(),g2=audioCtx.createGain();
+    o2.type='sawtooth';
+    o2.frequency.setValueAtTime(180,t);o2.frequency.exponentialRampToValueAtTime(900,t+1.2);
+    g2.gain.setValueAtTime(0.18,t);g2.gain.exponentialRampToValueAtTime(0.001,t+1.3);
+    o2.connect(g2);g2.connect(audioCtx.destination);
+    o2.start(t);o2.stop(t+1.4);
+  }catch(e){}
+}
+
+function showSuperChampion(){
+  // Step 1: Run finish line animation on the track (3 seconds)
+  finishAnim = 180;
+  playFinishLineSound();
+
+  // Step 2: After 2.8s (finish line passes), show champion overlay + fireworks
+  setTimeout(function(){
+    runFireworks(true);
+    const ov=document.createElement('div');
+    ov.id='champion-overlay';
+    ov.style.cssText='position:fixed;inset:0;z-index:999;background:rgba(0,0,0,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.2rem;animation:fadeIn .6s ease;';
+    ov.innerHTML=`
+      <div style="font-size:clamp(2.5rem,8vw,5rem);animation:pulse 1s ease-in-out infinite alternate;text-shadow:0 0 60px gold;">🏆</div>
+      <div style="color:#ffd040;font-size:clamp(1.6rem,5vw,3.2rem);font-weight:900;font-family:'Noto Serif TC',serif;letter-spacing:.12em;text-shadow:0 0 40px rgba(255,208,64,.8);">超級賽車手</div>
+      <div style="color:#ff8040;font-size:clamp(1rem,3vw,1.6rem);font-family:'Noto Serif TC',serif;letter-spacing:.1em;">SUPER CHAMPION RACER</div>
+      <div style="color:rgba(255,255,255,.7);font-size:clamp(.8rem,2vw,1.1rem);margin-top:.5rem;letter-spacing:.08em;">完成三輪挑戰・至高榮譽</div>
+      <div style="display:flex;gap:1rem;margin-top:1.2rem;">
+        <button onclick="document.getElementById('champion-overlay').remove();endGame();" style="background:linear-gradient(90deg,#ffd040,#ff8000);color:#000;border:none;padding:.7rem 2rem;font-size:1.1rem;font-family:'Noto Serif TC',serif;font-weight:700;border-radius:4px;cursor:pointer;letter-spacing:.12em;">查看成績</button>
+      </div>`;
+    document.body.appendChild(ov);
+    stopBgMusic();
+  }, 2800);
+}
+
 function endGame(){
   stopBgMusic();
   gameRunning=false;cancelAnimationFrame(cardAF);clearInterval(timerInt);
   document.getElementById('game-screen').classList.add('hidden');
   document.getElementById('boss-overlay').classList.add('hidden');
   document.getElementById('result-screen').classList.remove('hidden');
+  setTimeout(function(){runFireworks(false);},400);
   const t=score>=500?'🏆 CHAMPION RACER!':score>=200?'🎉 GREAT DRIVER!':'💪 KEEP GOING!';
   const mm=String(Math.floor(elapsedSec/60)).padStart(2,'0');
   const ss=String(elapsedSec%60).padStart(2,'0');
